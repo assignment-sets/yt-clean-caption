@@ -1,0 +1,14 @@
+[project]
+name = "yt-transcript"
+version = "0.1.0"
+description = "Clean and deduplicate noisy YouTube auto-generated VTT transcripts to prevent token wastage in LLMs."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "httpx>=0.24.0",
+]
+
+[tool.uv]
+package = false

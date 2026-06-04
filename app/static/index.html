@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Transcript Cleaner & LLM Token Saver</title>
+    <meta name="description" content="Clean and deduplicate noisy YouTube timedtext captions. Strips timestamps, formatting tags, and consecutive scrolling lines to save up to 70% of LLM prompt tokens.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="bg-gradient-overlay"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.95 1.96C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.96A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" fill="url(#brandGradient)"/>
+                    <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white"/>
+                    <defs>
+                        <linearGradient id="brandGradient" x1="1" y1="4" x2="23" y2="20" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#ff007f"/>
+                            <stop offset="1" stop-color="#7928ca"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="logo-text">Antigravity <span>Transcripts</span></div>
+            </div>
+            <h1>YouTube Caption Cleaner & Token Saver</h1>
+            <p class="subtitle">Convert noisy, scrolling auto-generated captions into pristine plain text. Avoid duplicate context lines, eliminate tags, and save massive LLM tokens.</p>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="app-main">
+            <!-- URL input Form -->
+            <section class="card glass-card input-section">
+                <h2>Paste Caption URL</h2>
+                <form id="cleanForm" class="input-form">
+                    <div class="input-wrapper">
+                        <input 
+                            type="url" 
+                            id="captionUrl" 
+                            placeholder="Paste YouTube timedtext URL (e.g. contains api/timedtext...)" 
+                            required 
+                            autocomplete="off"
+                        >
+                        <button type="button" id="clearBtn" class="clear-btn" aria-label="Clear input">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                    <button type="submit" id="submitBtn" class="btn btn-primary">
+                        <span class="btn-text">Fetch & Clean</span>
+                        <div class="btn-loader hidden"></div>
+                    </button>
+                </form>
+
+                <!-- Example Section -->
+                <div class="examples-container">
+                    <span class="example-label">Try an example:</span>
+                    <button type="button" id="exampleBtn" class="btn-example">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        Load YouTube Sample
+                    </button>
+                </div>
+            </section>
+
+            <!-- How to Use Guide -->
+            <section class="card glass-card guide-section">
+                <div class="guide-header">
+                    <svg class="guide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <h2>How to Get the Caption URL</h2>
+                </div>
+                <div class="guide-content">
+                    <ol class="steps-list">
+                        <li>
+                            <span class="step-num">1</span>
+                            <span class="step-text">Open browser <strong>DevTools</strong> (Press <kbd>F12</kbd> or right-click and choose <strong>Inspect</strong>).</span>
+                        </li>
+                        <li>
+                            <span class="step-num">2</span>
+                            <span class="step-text">Switch to the <strong>Network</strong> tab inside the DevTools panel.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">3</span>
+                            <span class="step-text">Play your video on YouTube and toggle the <strong>Captions (CC)</strong> button <strong>ON</strong>.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">4</span>
+                            <span class="step-text">Type <strong><code class="guide-code">timedtext</code></strong> in the Network filter search box.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">5</span>
+                            <span class="step-text">Right-click the matching request and choose <strong>Copy</strong> → <strong>Copy link address</strong>.</span>
+                        </li>
+                        <li>
+                            <span class="step-num">6</span>
+                            <span class="step-text">Paste the copied URL in the input box above and click <strong>Fetch & Clean</strong>!</span>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Results Section (Hidden initially) -->
+            <section id="resultsSection" class="results-section hidden">
+                
+                <!-- Stats Dashboard -->
+                <div class="stats-grid">
+                    <div class="card glass-card stat-card">
+                        <div class="stat-title">Original Size</div>
+                        <div class="stat-value" id="statOriginal">0</div>
+                        <div class="stat-unit" id="statOriginalTokens">0 tokens</div>
+                    </div>
+                    <div class="card glass-card stat-card">
+                        <div class="stat-title">Cleaned Size</div>
+                        <div class="stat-value" id="statCleaned">0</div>
+                        <div class="stat-unit" id="statCleanedTokens">0 tokens</div>
+                    </div>
+                    <div class="card glass-card stat-card highlight-card">
+                        <div class="stat-title">Context Saved</div>
+                        <div class="stat-value" id="statSaved">0%</div>
+                        <div class="stat-unit" id="statTokensSaved">0 tokens saved</div>
+                    </div>
+                </div>
+
+                <!-- Cleaned Output Card -->
+                <div class="card glass-card output-card">
+                    <div class="output-header">
+                        <h3>Cleaned Transcript</h3>
+                        <div class="action-buttons">
+                            <button id="copyBtn" class="btn btn-secondary" title="Copy text to clipboard">
+                                <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <svg class="icon-check hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                <span id="copyBtnText">Copy Text</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="output-body">
+                        <article id="outputContent" class="output-content"></article>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Banner -->
+            <div id="errorBanner" class="card error-card hidden">
+                <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <div class="error-message" id="errorMessage">Something went wrong. Please check your URL and try again.</div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>Designed with Antigravity AI. Optimize your context windows and prevent LLM hallucination.</p>
+        </footer>
+    </div>
+
+    <!-- Script Resource -->
+    <script src="/static/script.js"></script>
+</body>
+</html>
