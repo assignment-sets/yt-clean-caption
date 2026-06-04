@@ -99,6 +99,12 @@ body {
     z-index: 1;
 }
 
+.app-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
 /* --- Header --- */
 .app-header {
     text-align: center;

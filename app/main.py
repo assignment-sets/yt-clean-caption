@@ -174,9 +174,22 @@ async def clean_transcript(request: CleanRequest):
         )
     )
 
-# Serve Frontend static assets
-@app.get("/")
-async def serve_index():
-    return FileResponse("app/static/index.html")
+try:
+    from workers import WorkerEntrypoint
+    import asgi
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    class Default(WorkerEntrypoint):
+        async def fetch(self, request):
+            return await asgi.fetch(app, request, self.env)
+except ImportError:
+    # Serve Frontend static assets only when running locally (outside of Cloudflare Workers)
+    @app.get("/")
+    async def serve_index():
+        from pathlib import Path
+        from fastapi.responses import HTMLResponse
+        path = Path("public/index.html")
+        if path.exists():
+            return HTMLResponse(content=path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>YouTube Transcript Cleaner</h1>")
+
+    app.mount("/static", StaticFiles(directory="public/static"), name="static")

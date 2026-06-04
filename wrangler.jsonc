@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yt-clean-caption",
+  "main": "app/main.py",
+  "compatibility_date": "2026-06-03",
+  "compatibility_flags": [
+    "python_workers"
+  ],
+  "assets": {
+    "directory": "./public"
+  }
+}
