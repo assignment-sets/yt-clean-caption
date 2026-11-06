@@ -1,5 +1,7 @@
 import html
+import json
 import re
+from typing import Optional, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -10,7 +12,7 @@ import httpx
 app = FastAPI(
     title="YouTube Transcript Cleaner",
     description="Clean and deduplicate noisy YouTube auto-generated VTT transcripts to prevent token wastage in LLMs.",
-    version="0.1.0"
+    version="0.2.0"
 )
 
 class CleanRequest(BaseModel):
@@ -29,6 +31,28 @@ class CleanResponse(BaseModel):
     vtt_url: str
     cleaned_text: str
     stats: TranscriptStats
+    video_id: Optional[str] = None
+    language: Optional[str] = None
+
+def extract_video_id(url_or_id: str) -> Optional[str]:
+    """
+    Extracts an 11-character YouTube video ID from various YouTube URL formats:
+    - https://www.youtube.com/watch?v=XH36GOyMDQ0
+    - https://youtu.be/XH36GOyMDQ0
+    - https://www.youtube.com/shorts/XH36GOyMDQ0
+    - https://www.youtube.com/embed/XH36GOyMDQ0
+    - Raw 11-char video ID (e.g. XH36GOyMDQ0)
+    """
+    clean_str = url_or_id.strip()
+    patterns = [
+        r'(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})',
+        r'^([a-zA-Z0-9_-]{11})$'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, clean_str)
+        if match:
+            return match.group(1)
+    return None
 
 def convert_url_to_vtt(url: str) -> str:
     """
@@ -44,6 +68,108 @@ def convert_url_to_vtt(url: str) -> str:
         return new_url
     except Exception as e:
         raise ValueError(f"Failed to process YouTube caption URL: {str(e)}")
+
+async def resolve_video_vtt_url(client: httpx.AsyncClient, video_id: str) -> Tuple[str, str]:
+    """
+    Queries YouTube's internal Android player endpoint using the video's embedded session key
+    and authentic mobile client headers to discover caption tracks without triggering bot challenges.
+    Returns (vtt_url, language_code).
+    """
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    browser_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # Step 1: Fetch watch page to dynamically extract YouTube's public embedded INNERTUBE_API_KEY and visitorData
+    api_key = ""
+    visitor_data = ""
+    html_content = ""
+    try:
+        watch_resp = await client.get(watch_url, headers=browser_headers, timeout=12.0)
+        if watch_resp.status_code == 200:
+            html_content = watch_resp.text
+            match_key = re.search(r'\"INNERTUBE_API_KEY\":\"([^\"]+)\"', html_content)
+            if match_key:
+                api_key = match_key.group(1)
+            match_visitor = re.search(r'\"visitorData\":\"([^\"]+)\"', html_content)
+            if match_visitor:
+                visitor_data = match_visitor.group(1)
+    except Exception:
+        pass
+
+    # Step 2: Query Android InnerTube player endpoint
+    player_url = f"https://www.youtube.com/youtubei/v1/player?key={api_key}" if api_key else "https://www.youtube.com/youtubei/v1/player"
+    payload = {
+        "context": {
+            "client": {
+                "clientName": "ANDROID",
+                "clientVersion": "20.10.38",
+                "androidSdkVersion": 34,
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "videoId": video_id
+    }
+    if visitor_data:
+        payload["context"]["client"]["visitorData"] = visitor_data
+
+    android_headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US; Pixel 8 Pro Build/UD1A.230803.041)",
+        "X-YouTube-Client-Name": "3",
+        "X-YouTube-Client-Version": "20.10.38"
+    }
+    if visitor_data:
+        android_headers["X-Goog-Visitor-Id"] = visitor_data
+
+    try:
+        resp = await client.post(player_url, json=payload, headers=android_headers, timeout=12.0)
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Network error querying YouTube caption metadata: {str(e)}"
+        )
+
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"YouTube metadata API returned status code {resp.status_code}."
+        )
+
+    data = resp.json()
+
+    # Check playability status
+    playability = data.get("playabilityStatus", {})
+    caption_tracks = []
+
+    if playability.get("status") in ("OK", None):
+        caption_renderer = data.get("captions", {}).get("playerCaptionsTracklistRenderer", {})
+        caption_tracks = caption_renderer.get("captionTracks", [])
+
+    # Fallback: If Android endpoint is challenged or tracks not found, check watch page HTML
+    if not caption_tracks and html_content:
+        cap_match = re.search(r'\"captionTracks\":\s*(\[.+?\])', html_content)
+        if cap_match:
+            try:
+                caption_tracks = json.loads(cap_match.group(1))
+            except Exception:
+                pass
+
+    if not caption_tracks:
+        reason = playability.get("reason", "No captions found for this video. Captions may be disabled or not yet generated.")
+        raise HTTPException(status_code=400, detail=f"YouTube caption error: {reason}")
+
+    # Prefer English track, or fallback to the first available track
+    selected_track = next((t for t in caption_tracks if t.get("languageCode", "").startswith("en")), caption_tracks[0])
+    base_url = selected_track.get("baseUrl")
+    lang = selected_track.get("languageCode", "unknown")
+
+    if not base_url:
+        raise HTTPException(status_code=404, detail="Caption track baseUrl missing from YouTube response.")
+
+    return convert_url_to_vtt(base_url), lang
 
 def parse_vtt_to_clean_text(vtt_content: str) -> str:
     """
@@ -109,41 +235,48 @@ def estimate_tokens(text: str) -> int:
 
 @app.post("/api/clean", response_model=CleanResponse)
 async def clean_transcript(request: CleanRequest):
-    url_str = str(request.url).strip()
-    if not url_str:
-        raise HTTPException(status_code=400, detail="URL cannot be empty")
-        
-    if "youtube.com/api/timedtext" not in url_str:
-        raise HTTPException(
-            status_code=400, 
-            detail="Invalid URL. Please provide a valid YouTube timedtext caption URL."
-        )
+    input_str = str(request.url).strip()
+    if not input_str:
+        raise HTTPException(status_code=400, detail="URL or Video ID cannot be empty")
 
-    try:
-        vtt_url = convert_url_to_vtt(url_str)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    async with httpx.AsyncClient() as client:
+        video_id = extract_video_id(input_str)
+        detected_lang = None
 
-    # Fetch the live WebVTT subtitle file
-    try:
-        async with httpx.AsyncClient() as client:
+        if "youtube.com/api/timedtext" in input_str:
+            # Direct legacy timedtext URL
+            try:
+                vtt_url = convert_url_to_vtt(input_str)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        elif video_id:
+            # Standard video URL, Short URL, or 11-char Video ID
+            vtt_url, detected_lang = await resolve_video_vtt_url(client, video_id)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid input. Please provide a YouTube video URL (e.g. https://www.youtube.com/watch?v=...), Short, 11-char Video ID, or timedtext URL."
+            )
+
+        # Fetch the live WebVTT subtitle file
+        try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
             response = await client.get(vtt_url, headers=headers, timeout=15.0)
-            
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Failed to fetch captions from YouTube. YouTube returned status code {response.status_code}."
                 )
-                
+
             vtt_content = response.text
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Network error trying to connect to YouTube caption API: {str(e)}"
-        )
+        except httpx.RequestError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Network error trying to connect to YouTube caption endpoint: {str(e)}"
+            )
 
     # Clean the transcript
     cleaned_text = parse_vtt_to_clean_text(vtt_content)
@@ -161,9 +294,11 @@ async def clean_transcript(request: CleanRequest):
         savings_percentage = round((tokens_saved / original_tokens) * 100, 1)
 
     return CleanResponse(
-        original_url=url_str,
+        original_url=input_str,
         vtt_url=vtt_url,
         cleaned_text=cleaned_text,
+        video_id=video_id,
+        language=detected_lang,
         stats=TranscriptStats(
             original_chars=original_chars,
             cleaned_chars=cleaned_chars,
