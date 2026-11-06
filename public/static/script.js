@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exampleBtn = document.getElementById('exampleBtn');
 
     // --- User's Example URL ---
-    const SAMPLE_URL = "https://www.youtube.com/api/timedtext?v=XH36GOyMDQ0&ei=Li0Vaq-YI4Ky4t4P3oWDuQI&caps=asr&opi=112496729&exp=xpe&xoaf=5&xowf=1&xospf=1&hl=en-GB&ip=0.0.0.0&ipbits=0&expire=1779797918&sparams=ip%2Cipbits%2Cexpire%2Cv%2Cei%2Ccaps%2Copi%2Cexp%2Cxoaf&signature=7366126B1F745521575FDD8DB99F7BD7DBB730C6.E9446C04A89DA3CAD0B9FEEAAD36AA2C32E8CC0B&key=yt8&kind=asr&lang=en&potc=1&pot=MlM1kfaaGo2s8TWt7muRG6qXSuSnHig-Ch9RrTLZYjvFUlfSRVOUQZFaaDUOqf-Kcp7FSJnnjqBo-W8HsMGnzabRgsFmu7FArPQln8jJBrwA3Ftulw%3D%3D&fmt=vtt&xorb=2&xobt=3&xovt=3&cbr=Chrome&cbrver=148.0.0.0&c=WEB&cver=2.20260521.00.00&cplayer=UNIPLAYER&cos=Windows&cosver=10.0&cplatform=DESKTOP";
+    const SAMPLE_URL = "https://www.youtube.com/watch?v=pde1xL9D7ic";
 
     // --- Input Clear Button Handler ---
     captionUrlInput.addEventListener('input', () => {

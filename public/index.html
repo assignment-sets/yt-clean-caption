@@ -41,13 +41,13 @@
         <main class="app-main">
             <!-- URL input Form -->
             <section class="card glass-card input-section">
-                <h2>Paste Caption URL</h2>
+                <h2>Paste YouTube URL or Video ID</h2>
                 <form id="cleanForm" class="input-form">
                     <div class="input-wrapper">
                         <input 
-                            type="url" 
+                            type="text" 
                             id="captionUrl" 
-                            placeholder="Paste YouTube timedtext URL (e.g. contains api/timedtext...)" 
+                            placeholder="Paste YouTube Video URL, Shorts URL, or Video ID..." 
                             required 
                             autocomplete="off"
                         >
@@ -79,33 +79,21 @@
                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
                         <line x1="12" y1="17" x2="12.01" y2="17"></line>
                     </svg>
-                    <h2>How to Get the Caption URL</h2>
+                    <h2>How It Works</h2>
                 </div>
                 <div class="guide-content">
                     <ol class="steps-list">
                         <li>
                             <span class="step-num">1</span>
-                            <span class="step-text">Open browser <strong>DevTools</strong> (Press <kbd>F12</kbd> or right-click and choose <strong>Inspect</strong>).</span>
+                            <span class="step-text">Copy any YouTube video link (e.g. <code>https://www.youtube.com/watch?v=...</code>, <code>youtu.be/...</code>, or Shorts).</span>
                         </li>
                         <li>
                             <span class="step-num">2</span>
-                            <span class="step-text">Switch to the <strong>Network</strong> tab inside the DevTools panel.</span>
+                            <span class="step-text">Paste it into the box above and click <strong>Fetch & Clean</strong>.</span>
                         </li>
                         <li>
                             <span class="step-num">3</span>
-                            <span class="step-text">Play your video on YouTube and toggle the <strong>Captions (CC)</strong> button <strong>ON</strong>.</span>
-                        </li>
-                        <li>
-                            <span class="step-num">4</span>
-                            <span class="step-text">Type <strong><code class="guide-code">timedtext</code></strong> in the Network filter search box.</span>
-                        </li>
-                        <li>
-                            <span class="step-num">5</span>
-                            <span class="step-text">Right-click the matching request and choose <strong>Copy</strong> → <strong>Copy link address</strong>.</span>
-                        </li>
-                        <li>
-                            <span class="step-num">6</span>
-                            <span class="step-text">Paste the copied URL in the input box above and click <strong>Fetch & Clean</strong>!</span>
+                            <span class="step-text">We automatically resolve captions, remove scrolling duplicates and formatting tags, and output clean LLM-ready paragraphs.</span>
                         </li>
                     </ol>
                 </div>
