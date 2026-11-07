@@ -88,6 +88,10 @@ To deploy the stateless python worker and static assets:
 uvx --from workers-py pywrangler deploy
 ```
 
+> [!IMPORTANT]
+> **Do not use bare `npx wrangler deploy` directly.**
+> Cloudflare Python Workers compile against Pyodide (WASM) and resolve packages into `python_modules/` via `pylock.toml`. Bare `npx wrangler deploy` bypasses package vendoring and triggers `ModuleNotFoundError: No module named 'fastapi'` on the edge. Always use `uvx --from workers-py pywrangler deploy`. (Requires `uv >= 0.13.4`, run `uv self update` if needed).
+
 ---
 
 ## 📄 Cloudflare Configuration (`wrangler.jsonc`)
@@ -118,3 +122,15 @@ The core cleaner logic lies in `app/main.py` under the function `parse_vtt_to_cl
 4. **Format/Tag stripping**: Strip inline timing and formatting tags (e.g. `<00:00:01.230>` or `<c>`) using regex `re.sub(r'<[^>]+>', '', cue_line)`. Unescape HTML entities.
 5. **Roll-up Deduplication**: Compare consecutive lines. If a line matches the previous line, discard it.
 6. **Paragraph flattening**: Combine all unique rows with a single space into a narrative paragraph.
+
+---
+
+## 🛡️ Caption Extraction & Anti-Bot Handshake
+
+When querying YouTube from Cloudflare Workers (datacenter IPs), bare unauthenticated requests to YouTube APIs return `LOGIN_REQUIRED ("Sign in to confirm you’re not a bot")`.
+
+To bypass this without external proxies or Google Cloud API keys, `resolve_video_vtt_url` in `app/main.py` uses a lightweight mobile handshake:
+1. **Dynamic Session Extraction**: Fetches the video watch page with browser headers to extract YouTube's public embedded `INNERTUBE_API_KEY` and session `visitorData`.
+2. **Android Client Emulation**: Queries `https://www.youtube.com/youtubei/v1/player?key={api_key}` with the `ANDROID` client payload (`clientVersion: 20.10.38`, `androidSdkVersion: 34`) and mobile headers (`X-YouTube-Client-Name: 3`, `X-Goog-Visitor-Id: visitorData`).
+3. **Fallback Discovery**: If the mobile endpoint fails, parses the `captionTracks` directly from the watch page HTML.
+4. **URL Format**: Forces `fmt=vtt` query param on the signed `baseUrl` so the VTT engine can clean it. Direct `timedtext` URLs are also accepted for backward compatibility.
