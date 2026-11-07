@@ -243,7 +243,14 @@ async def clean_transcript(request: CleanRequest):
         video_id = extract_video_id(input_str)
         detected_lang = None
 
-        if "youtube.com/api/timedtext" in input_str:
+        parsed_input = urlparse(input_str)
+        is_timedtext = (
+            parsed_input.scheme == "https"
+            and parsed_input.netloc in ("www.youtube.com", "youtube.com")
+            and parsed_input.path == "/api/timedtext"
+        )
+
+        if is_timedtext:
             # Direct legacy timedtext URL
             try:
                 vtt_url = convert_url_to_vtt(input_str)
@@ -270,6 +277,11 @@ async def clean_transcript(request: CleanRequest):
                     status_code=response.status_code,
                     detail=f"Failed to fetch captions from YouTube. YouTube returned status code {response.status_code}."
                 )
+
+            # Max 5MB payload limit to prevent memory exhaustion on edge workers
+            content_len = int(response.headers.get("Content-Length") or 0)
+            if content_len > 5_000_000 or len(response.content) > 5_000_000:
+                raise HTTPException(status_code=413, detail="Caption file exceeds 5MB limit.")
 
             vtt_content = response.text
         except httpx.RequestError as e:
