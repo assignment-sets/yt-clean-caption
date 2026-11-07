@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statTokensSaved = document.getElementById('statTokensSaved');
     
     const outputContent = document.getElementById('outputContent');
+    const outputStatsBadge = document.getElementById('outputStatsBadge');
     const copyBtn = document.getElementById('copyBtn');
     const copyBtnText = document.getElementById('copyBtnText');
     const iconCopy = copyBtn.querySelector('.icon-copy');
@@ -44,15 +45,19 @@ document.addEventListener('DOMContentLoaded', () => {
         captionUrlInput.focus();
     });
 
+    // --- Keyboard Shortcut: Cmd/Ctrl + Enter to Submit ---
+    captionUrlInput.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            cleanForm.requestSubmit();
+        }
+    });
+
     // --- Load Sample Click ---
     exampleBtn.addEventListener('click', () => {
         captionUrlInput.value = SAMPLE_URL;
         clearBtn.classList.add('visible');
-        
-        // Add a micro-pulse highlight to input when loaded
         captionUrlInput.focus();
-        captionUrlInput.classList.add('pulse-input');
-        setTimeout(() => captionUrlInput.classList.remove('pulse-input'), 600);
     });
 
     // --- Submit / Fetch Form ---
@@ -101,13 +106,11 @@ document.addEventListener('DOMContentLoaded', () => {
             captionUrlInput.disabled = true;
             btnText.textContent = 'Processing...';
             btnLoader.classList.remove('hidden');
-            submitBtn.style.opacity = '0.8';
         } else {
             submitBtn.disabled = false;
             captionUrlInput.disabled = false;
-            btnText.textContent = 'Fetch & Clean';
+            btnText.textContent = 'Clean Transcript';
             btnLoader.classList.add('hidden');
-            submitBtn.style.opacity = '1';
         }
     }
 
@@ -120,7 +123,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Populate text content
         outputContent.textContent = data.cleaned_text;
 
-        // Populate metrics (with counting up effect or immediate presentation)
+        // Update word & character badge
+        if (outputStatsBadge) {
+            const wordCount = data.cleaned_text.trim().split(/\s+/).filter(Boolean).length;
+            outputStatsBadge.textContent = `${wordCount.toLocaleString()} words · ${data.stats.cleaned_chars.toLocaleString()} chars`;
+        }
+
+        // Populate metrics
         animateCountValue(statOriginal, 0, originalKB, ' KB', 1);
         statOriginalTokens.textContent = `~${data.stats.original_tokens_est.toLocaleString()} tokens`;
 
@@ -138,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Stat Counter Animation ---
     function animateCountValue(element, start, end, suffix = '', decimals = 0) {
         let startTimestamp = null;
-        const duration = 800; // ms
+        const duration = 600; // ms
         const targetValue = parseFloat(end);
         const startValue = parseFloat(start);
 
@@ -146,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!startTimestamp) startTimestamp = timestamp;
             const progress = Math.min((timestamp - startTimestamp) / duration, 1);
             
-            // Easing out quadratic function
+            // Easing out quadratic
             const easeProgress = progress * (2 - progress);
             const currentValue = startValue + easeProgress * (targetValue - startValue);
             
@@ -155,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progress < 1) {
                 window.requestAnimationFrame(step);
             } else {
-                element.textContent = end + suffix; // Guarantee precise end value
+                element.textContent = end + suffix;
             }
         };
         
@@ -170,13 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await navigator.clipboard.writeText(textToCopy);
             
-            // Success visual state transition
+            // Visual state feedback
             copyBtn.classList.add('success');
             iconCopy.classList.add('hidden');
             iconCheck.classList.remove('hidden');
-            copyBtnText.textContent = 'Copied!';
+            copyBtnText.textContent = 'Copied';
 
-            // Reset back after 2 seconds
             setTimeout(() => {
                 copyBtn.classList.remove('success');
                 iconCopy.classList.remove('hidden');
@@ -185,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 2000);
         } catch (err) {
             console.error('Failed to copy transcript:', err);
-            alert('Could not copy text automatically. Please select the text manually and copy.');
+            alert('Could not copy automatically. Please select text manually.');
         }
     });
 });
